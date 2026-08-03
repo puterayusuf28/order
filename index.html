@@ -554,7 +554,13 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
 
   /* ---------------- Helpers ---------------- */
   function rupiah(n){ return "Rp" + Math.round(n).toLocaleString("id-ID"); }
-  function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
+  function todayStr(){
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    return y + "-" + m + "-" + day;
+  }
   function fmtDate(iso){
     const d = new Date(iso);
     return d.toLocaleDateString("id-ID",{day:"2-digit",month:"short"});
