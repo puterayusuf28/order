@@ -138,6 +138,8 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
 }
 .mini-link svg{width:15px; height:15px;}
 .mini-link:active{transform:scale(.92); background:var(--blue-soft);}
+.mini-link-danger{color:var(--red);}
+.mini-link-danger:active{background:var(--red-soft);}
 .status-terima{background:var(--blue-soft); color:var(--blue);}
 .status-selesai{background:var(--teal-soft); color:var(--teal);}
 .status-bayar{background:var(--purple-soft); color:var(--purple);}
@@ -250,6 +252,18 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
 
 ::selection{background:var(--blue-soft);}
 
+/* ---------- Welcome / nama kasir ---------- */
+.welcome-card{
+  position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+  z-index:81; width:min(340px, 88vw);
+  background:var(--surface); border-radius:22px; padding:28px 24px 24px;
+  box-shadow:0 20px 50px -12px rgba(11,37,69,.35);
+  text-align:center;
+}
+.welcome-card.hide{ display:none; }
+.welcome-card h2{font-family:'Baloo 2',sans-serif; font-size:19px; margin:0 0 8px; color:var(--blue-dark);}
+.welcome-card p{font-size:12.5px; color:var(--muted); margin:0 0 18px; line-height:1.5;}
+
 /* ---------- Kwitansi / Receipt ---------- */
 #receipt-frame{
   background:#EEF3FB; border-radius:16px; padding:18px 10px; display:flex; justify-content:center;
@@ -290,6 +304,19 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
 </style>
 </head>
 <body>
+
+<!-- WELCOME / NAMA KASIR (first run) -->
+<div class="overlay show" id="overlay-welcome" style="z-index:80;"></div>
+<div class="welcome-card" id="welcome-card">
+  <img id="welcome-logo" alt="Logo" style="width:56px; height:56px; margin:0 auto 14px; border-radius:50%; box-shadow:0 4px 12px rgba(11,37,69,.2); display:block;">
+  <h2>Selamat Datang 👋</h2>
+  <p>Sebelum mulai, siapa nama kamu? Nama ini akan tercatat di tiap order &amp; muncul di kwitansi.</p>
+  <div class="field" style="text-align:left;">
+    <label>Nama Anda</label>
+    <input type="text" id="f-welcome-name" placeholder="cth. Budi" autocomplete="off">
+  </div>
+  <button class="btn-primary" id="btn-welcome-start">Mulai</button>
+</div>
 
 <header class="topbar">
   <div class="topbar-row">
@@ -423,7 +450,11 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
     </button>
   </div>
   <div class="sheet-body">
-    <div class="settings-note">Info toko ini akan tampil di kwitansi. Data order tersimpan otomatis di HP ini — Push &amp; Pull dipakai untuk sinkron ke Google Sheets.</div>
+    <div class="settings-note">Nama kasir tampil di kwitansi &amp; ikut tersimpan di tiap order. Info toko tampil di kop kwitansi. Data order tersimpan otomatis di HP ini — Push &amp; Pull dipakai untuk sinkron ke Google Sheets.</div>
+    <div class="field settings-field">
+      <label>Nama Kasir (kamu)</label>
+      <input type="text" id="f-kasir-name" placeholder="cth. Budi">
+    </div>
     <div class="field settings-field">
       <label>Alamat Toko (opsional)</label>
       <input type="text" id="f-shop-alamat" placeholder="cth. Jl. Merdeka No. 10, Jakarta">
@@ -493,17 +524,31 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
   /* ---------------- Storage ---------------- */
   const LS_ORDERS = "py_laundry_orders";
   const LS_COUNTER = "py_laundry_counter";
+  const LS_COUNTER_DATE = "py_laundry_counter_date";
   const LS_SCRIPT_URL = "py_laundry_script_url";
   const LS_SHOP_INFO = "py_laundry_shop_info";
+  const LS_KASIR_NAME = "py_laundry_kasir_name";
 
   function loadOrders(){ try{ return JSON.parse(localStorage.getItem(LS_ORDERS)) || []; }catch(e){ return []; } }
   function saveOrders(list){ localStorage.setItem(LS_ORDERS, JSON.stringify(list)); }
+
+  // Counter resets automatically every day, so numbering per device stays short (001, 002, ...)
   function nextCounter(){
-    let c = parseInt(localStorage.getItem(LS_COUNTER) || "0", 10) + 1;
+    const today = todayStr();
+    const storedDate = localStorage.getItem(LS_COUNTER_DATE);
+    let c = (storedDate === today) ? parseInt(localStorage.getItem(LS_COUNTER) || "0", 10) : 0;
+    c += 1;
     localStorage.setItem(LS_COUNTER, String(c));
+    localStorage.setItem(LS_COUNTER_DATE, today);
     return c;
   }
-  function fmtID(n){ return "PY-" + String(n).padStart(5,"0"); }
+
+  // ID = tanggal + counter harian + 2 karakter acak, supaya antar-HP nyaris mustahil bentrok saat Push
+  function fmtID(counter){
+    const ymd = todayStr().slice(2).replace(/-/g,""); // YYMMDD
+    const rand = Math.random().toString(36).slice(2,4).toUpperCase();
+    return "PY" + ymd + "-" + String(counter).padStart(3,"0") + rand;
+  }
 
   let orders = loadOrders();
 
@@ -672,6 +717,9 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
                 <button class="mini-link" data-action="show-receipt" data-id="${o.id}">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h3"/></svg>
                 </button>
+                <button class="mini-link mini-link-danger" data-action="delete-order" data-id="${o.id}">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+                </button>
                 <select class="status-select ${statusClass(o.status)}" data-action="change-status" data-id="${o.id}">
                   ${STATUS_FLOW.map(s => `<option value="${s}" ${s===o.status?"selected":""}>${s}</option>`).join("")}
                 </select>
@@ -690,7 +738,6 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
   }
 
   function refresh(){ renderStats(); renderList(); }
-  document.getElementById("brand-logo").src = LOGO_URI;
 
   /* ---------------- Status change & receipt open ---------------- */
   document.getElementById("order-list").addEventListener("click", (e)=>{
@@ -698,6 +745,20 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
     if(receiptBtn){
       const o = orders.find(x=>x.id===receiptBtn.dataset.id);
       if(o) openReceipt(o);
+      return;
+    }
+    const delBtn = e.target.closest('[data-action="delete-order"]');
+    if(delBtn){
+      const o = orders.find(x=>x.id===delBtn.dataset.id);
+      if(!o) return;
+      const ok = confirm("Hapus order " + o.id + " (" + o.nama + ")? Tindakan ini tidak bisa dibatalkan.");
+      if(!ok) return;
+      orders = orders.filter(x=>x.id !== o.id);
+      saveOrders(orders);
+      refresh();
+      toast("Order " + o.id + " dihapus");
+      if(o.synced) deleteRemote_(o.id);
+      return;
     }
   });
 
@@ -756,6 +817,7 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
       total,
       status: "Terima Order",
       catatan: document.getElementById("f-catatan").value.trim(),
+      kasir: localStorage.getItem(LS_KASIR_NAME) || "",
       createdAt: Date.now(),
       synced: false
     };
@@ -771,6 +833,7 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
   const sheetS = document.getElementById("settings-sheet");
   document.getElementById("btn-settings").addEventListener("click", ()=>{
     document.getElementById("f-script-url").value = localStorage.getItem(LS_SCRIPT_URL) || "";
+    document.getElementById("f-kasir-name").value = localStorage.getItem(LS_KASIR_NAME) || "";
     const shop = JSON.parse(localStorage.getItem(LS_SHOP_INFO) || "{}");
     document.getElementById("f-shop-alamat").value = shop.alamat || "";
     document.getElementById("f-shop-telp").value = shop.telp || "";
@@ -782,6 +845,8 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
   document.getElementById("btn-save-settings").addEventListener("click", ()=>{
     const url = document.getElementById("f-script-url").value.trim();
     localStorage.setItem(LS_SCRIPT_URL, url);
+    const kasirName = document.getElementById("f-kasir-name").value.trim();
+    if(kasirName) localStorage.setItem(LS_KASIR_NAME, kasirName);
     localStorage.setItem(LS_SHOP_INFO, JSON.stringify({
       alamat: document.getElementById("f-shop-alamat").value.trim(),
       telp: document.getElementById("f-shop-telp").value.trim()
@@ -853,7 +918,7 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
         <span class="rc-badge">${o.status.toUpperCase()}</span>
       </div>
       <div class="rc-footer rc-center">
-        Terima kasih telah mencuci di sini.<br>Simpan kwitansi ini untuk pengambilan.
+        ${o.kasir ? "Dilayani oleh: " + escapeHtml(o.kasir) + "<br>" : ""}Terima kasih telah mencuci di sini.<br>Simpan kwitansi ini untuk pengambilan.
       </div>
     `;
     overlayR.classList.add("show"); sheetR.classList.add("show");
@@ -911,7 +976,42 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
   document.getElementById("btn-push").addEventListener("click", doPush);
   document.getElementById("btn-pull").addEventListener("click", doPull);
 
+  // Best-effort: hapus baris di Google Sheets juga kalau order ini sebelumnya sudah pernah di-Push.
+  // Dijalankan diam-diam di background — kalau gagal (offline/URL belum diisi), data lokal tetap terhapus.
+  async function deleteRemote_(id){
+    const url = localStorage.getItem(LS_SCRIPT_URL);
+    if(!url) return;
+    try{
+      await fetch(url, {
+        method: "POST",
+        headers: {"Content-Type":"text/plain;charset=utf-8"},
+        body: JSON.stringify({ action:"delete", id })
+      });
+    }catch(err){ /* diam-diam gagal, gak ganggu kasir */ }
+  }
+
   /* ---------------- Init ---------------- */
+  document.getElementById("brand-logo").src = LOGO_URI;
+  document.getElementById("welcome-logo").src = LOGO_URI;
+
+  const overlayWelcome = document.getElementById("overlay-welcome");
+  const welcomeCard = document.getElementById("welcome-card");
+  function hideWelcome(){ overlayWelcome.classList.remove("show"); welcomeCard.classList.add("hide"); }
+  const savedKasir = localStorage.getItem(LS_KASIR_NAME);
+  if(savedKasir){ hideWelcome(); }
+  else { document.getElementById("f-welcome-name").focus(); }
+
+  document.getElementById("btn-welcome-start").addEventListener("click", ()=>{
+    const name = document.getElementById("f-welcome-name").value.trim();
+    if(!name){ toast("Isi nama kamu dulu ya", true); return; }
+    localStorage.setItem(LS_KASIR_NAME, name);
+    hideWelcome();
+    toast("Selamat bekerja, " + name + "!");
+  });
+  document.getElementById("f-welcome-name").addEventListener("keydown", (e)=>{
+    if(e.key === "Enter") document.getElementById("btn-welcome-start").click();
+  });
+
   refresh();
 })();
 </script>
