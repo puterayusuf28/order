@@ -2040,9 +2040,16 @@ QRCode.createBytes = function(buffer, rsBlocks) {
     const container = document.getElementById("order-list");
 
     if(list.length === 0){
-      container.innerHTML = '<div class="empty-state">'+
-        '<svg class="bub" viewBox="0 0 40 40" fill="none"><circle cx="14" cy="22" r="11" fill="#B9CDF3"/><circle cx="27" cy="14" r="7" fill="#D3E2FB"/><circle cx="30" cy="27" r="4.5" fill="#B9CDF3"/></svg>'+
-        '<h3>Belum ada order</h3><p>Tekan "Order Baru" untuk mulai mencatat.</p></div>';
+      const looksLikeScannedId = /^PY\d{6}-/i.test(q);
+      if(q && looksLikeScannedId){
+        container.innerHTML = '<div class="empty-state">'+
+          '<svg class="bub" viewBox="0 0 40 40" fill="none"><circle cx="14" cy="22" r="11" fill="#B9CDF3"/><circle cx="27" cy="14" r="7" fill="#D3E2FB"/><circle cx="30" cy="27" r="4.5" fill="#B9CDF3"/></svg>'+
+          '<h3>Order gak ketemu di sini</h3><p>Order <b>'+escapeHtml(q.toUpperCase())+'</b> belum ada di HP/tab browser ini.<br><br>Kemungkinan: order-nya dibuat di device/tab lain (termasuk beda kalau salah satunya Incognito — itu dianggap "HP" terpisah). Coba <b>Pull</b> dulu, atau pastikan buka di tab yang sama dengan yang dipakai bikin order.</p></div>';
+      } else {
+        container.innerHTML = '<div class="empty-state">'+
+          '<svg class="bub" viewBox="0 0 40 40" fill="none"><circle cx="14" cy="22" r="11" fill="#B9CDF3"/><circle cx="27" cy="14" r="7" fill="#D3E2FB"/><circle cx="30" cy="27" r="4.5" fill="#B9CDF3"/></svg>'+
+          '<h3>Belum ada order</h3><p>Tekan "Order Baru" untuk mulai mencatat.</p></div>';
+      }
       return;
     }
 
