@@ -2433,17 +2433,70 @@ QRCode.createBytes = function(buffer, rsBlocks) {
   function handleScanResult_(rawValue){
     const id = extractOrderIdFromScan_(rawValue);
     closeScanner();
-    document.getElementById("search-input").value = id;
-    renderList();
-    const o = orders.find(x=>x.id === id);
+    
+    // Validasi jika hasil scan kosong
+    if(!id){
+      toast("Gagal membaca barcode/QR", true);
+      return;
+    }
+
+    // Set input pencarian secara eksak
+    const searchInput = document.getElementById("search-input");
+    searchInput.value = id;
+    
+    // Filter langsung daftar order berdasarkan ID secara persis (exact match)
+    // agar tidak tercampur dengan hasil .includes() yang terlalu longgar
+    let list = orders.slice().sort((a,b)=> b.createdAt - a.createdAt);
+    list = list.filter(o => o.id.toUpperCase() === id.toUpperCase());
+    
+    document.getElementById("order-count-label").textContent = list.length + " order";
+    const container = document.getElementById("order-list");
+
+    if(list.length === 0){
+      container.innerHTML = '<div class="empty-state"><h3>Order tidak ditemukan</h3><p>Order <b>'+escapeHtml(id.toUpperCase())+'</b> tidak ada di HP ini.</p></div>';
+    } else {
+      // Render ulang khusus untuk menampilkan 1 card hasil scan tersebut
+      container.innerHTML = list.map(o => `
+        <div class="ticket" data-id="${o.id}">
+          <div class="ticket-main">
+            <div class="ticket-body">
+              <div class="ticket-top">
+                <span class="ticket-id">${o.id}</span>
+                <span class="ticket-date">${fmtDate(o.tanggal)}</span>
+              </div>
+              <div class="ticket-name">${escapeHtml(o.nama)}</div>
+              <div class="ticket-meta">${orderMetaLine(o)}</div>
+              <div class="ticket-bottom">
+                <span class="ticket-total">${rupiah(o.total)}</span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <button class="mini-link" data-action="show-receipt" data-id="${o.id}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h3"/></svg>
+                  </button>
+                  <button class="mini-link mini-link-danger" data-action="delete-order" data-id="${o.id}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+                  </button>
+                  <select class="status-select ${statusClass(o.status)}" data-action="change-status" data-id="${o.id}">
+                    ${STATUS_FLOW.map(s => `<option value="${s}" ${s===o.status?"selected":""}>${s}</option>`).join("")}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="ticket-stub"></div>
+          </div>
+          ${o.catatan ? '<div class="ticket-note">"'+escapeHtml(o.catatan)+'"</div>' : ""}
+        </div>
+      `).join("");
+    }
+
+    const o = orders.find(x=>x.id.toUpperCase() === id.toUpperCase());
     if(o){
-      const card = document.querySelector('.ticket[data-id="'+CSS.escape(id)+'"]');
+      const card = document.querySelector('.ticket[data-id="'+CSS.escape(o.id)+'"]');
       if(card){
         card.scrollIntoView({behavior:"smooth", block:"center"});
         card.classList.add("ticket-flash");
         setTimeout(()=> card.classList.remove("ticket-flash"), 2200);
       }
-      toast("Order " + id + " ditemukan");
+      toast("Order " + o.id + " ditemukan");
     } else {
       toast("Order " + id + " belum ada di HP ini — coba Pull dulu", true);
     }
