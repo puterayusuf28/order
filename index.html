@@ -1994,6 +1994,9 @@ QRCode.createBytes = function(buffer, rsBlocks) {
     return (o.detail||"") + " &middot; " + o.paket + " &middot; <b>" + o.qty + "x</b>";
   }
 
+  const q =
+document.getElementById("search-input").value;
+console.log("renderList() Search =", q);
   function renderList(){
     const q = document.getElementById("search-input").value.trim().toLowerCase();
     let list = orders.slice().sort((a,b)=> b.createdAt - a.createdAt);
@@ -2364,9 +2367,17 @@ QRCode.createBytes = function(buffer, rsBlocks) {
   }
 
   function handleScanResult_(rawValue){
+    console.log("=== HANDLE SCAN ===");
+alert("HANDLE SCAN");
     const id = extractOrderIdFromScan_(rawValue);
+    console.log("QR Result :", rawValue);
+    console.log("Order ID  :", id);
     closeScanner();
     document.getElementById("search-input").value = id;
+    console.log(
+    "Search Input =",
+    document.getElementById("search-input").value
+);
     renderList();
     const o = orders.find(x=>x.id === id);
     if(o){
