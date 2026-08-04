@@ -1994,9 +1994,6 @@ QRCode.createBytes = function(buffer, rsBlocks) {
     return (o.detail||"") + " &middot; " + o.paket + " &middot; <b>" + o.qty + "x</b>";
   }
 
-  const q =
-document.getElementById("search-input").value;
-console.log("renderList() Search =", q);
   function renderList(){
     const q = document.getElementById("search-input").value.trim().toLowerCase();
     let list = orders.slice().sort((a,b)=> b.createdAt - a.createdAt);
@@ -2367,17 +2364,9 @@ console.log("renderList() Search =", q);
   }
 
   function handleScanResult_(rawValue){
-    console.log("=== HANDLE SCAN ===");
-alert("HANDLE SCAN");
     const id = extractOrderIdFromScan_(rawValue);
-    console.log("QR Result :", rawValue);
-    console.log("Order ID  :", id);
     closeScanner();
     document.getElementById("search-input").value = id;
-    console.log(
-    "Search Input =",
-    document.getElementById("search-input").value
-);
     renderList();
     const o = orders.find(x=>x.id === id);
     if(o){
@@ -2407,20 +2396,50 @@ alert("HANDLE SCAN");
     }
     scannerStream_ = stream;
     const video = document.getElementById("scanner-video");
+    const hintEl = document.querySelector("#scanner-overlay .scanner-bottom p");
     video.srcObject = stream;
     document.getElementById("scanner-overlay").classList.add("show");
+    if(hintEl) hintEl.textContent = "Arahkan kamera ke QR di kwitansi";
     await video.play().catch(()=>{});
 
-    const detector = new BarcodeDetector({ formats: ["qr_code"] });
+    let detector;
+    try{
+      detector = new BarcodeDetector({ formats: ["qr_code"] });
+    }catch(err){
+      toast("Fitur scan gak bisa dipakai di HP ini. Pakai kamera bawaan HP aja ya.", true);
+      closeScanner();
+      return;
+    }
+
+    const startedAt = Date.now();
+    let consecutiveErrors = 0;
+    let hintUpdated8s = false;
+
     const loop = async ()=>{
       if(!scannerStream_) return; // sudah ditutup
+      const elapsed = Date.now() - startedAt;
       try{
         const codes = await detector.detect(video);
+        consecutiveErrors = 0; // detect() berhasil jalan (walau belum nemu kode), reset penghitung error
         if(codes && codes.length){
           handleScanResult_(codes[0].rawValue);
           return;
         }
-      }catch(err){ /* frame gagal dibaca, coba lagi frame berikutnya */ }
+      }catch(err){
+        consecutiveErrors++;
+        console.warn("QR detect error:", err);
+        // Kalau detect() gagal terus-menerus (bukan cuma sesekali di frame awal),
+        // kemungkinan API-nya emang gak jalan normal di device ini — berhenti & kasih tau.
+        if(consecutiveErrors > 60){
+          toast("Scan otomatis gak jalan normal di HP ini. Pakai kamera bawaan HP aja ya.", true);
+          closeScanner();
+          return;
+        }
+      }
+      if(!hintUpdated8s && elapsed > 8000 && hintEl){
+        hintEl.textContent = "Belum ke-detect — coba lebih dekat, pastikan cahaya cukup & QR gak buram";
+        hintUpdated8s = true;
+      }
       scannerRAF_ = requestAnimationFrame(loop);
     };
     loop();
