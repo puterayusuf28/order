@@ -2370,7 +2370,12 @@ QRCode.createBytes = function(buffer, rsBlocks) {
     renderList();
     const o = orders.find(x=>x.id === id);
     if(o){
-      openReceipt(o);
+      const card = document.querySelector('.ticket[data-id="'+CSS.escape(id)+'"]');
+      if(card){
+        card.scrollIntoView({behavior:"smooth", block:"center"});
+        card.classList.add("ticket-flash");
+        setTimeout(()=> card.classList.remove("ticket-flash"), 2200);
+      }
       toast("Order " + id + " ditemukan");
     } else {
       toast("Order " + id + " belum ada di HP ini — coba Pull dulu", true);
