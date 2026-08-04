@@ -350,6 +350,19 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
 </head>
 <body>
 
+<!-- APP LOCK (kalau diaktifkan, ini muncul PALING DULU sebelum apapun lain) -->
+<div class="overlay" id="overlay-applock" style="z-index:99;"></div>
+<div class="welcome-card hide" id="applock-card" style="z-index:100;">
+  <svg viewBox="0 0 24 24" fill="none" stroke="#173C97" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:44px; height:44px; margin:0 auto 12px; display:block;"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+  <h2>Aplikasi Terkunci</h2>
+  <p>App ini khusus internal staf. Masukkan PIN untuk lanjut.</p>
+  <div class="field" style="text-align:left;">
+    <label>PIN Aplikasi</label>
+    <input type="password" id="f-applock-pin" inputmode="numeric" maxlength="6" placeholder="••••" autocomplete="off">
+  </div>
+  <button class="btn-primary" id="btn-applock-unlock">Buka</button>
+</div>
+
 <!-- WELCOME / NAMA KASIR (first run) -->
 <div class="overlay show" id="overlay-welcome" style="z-index:80;"></div>
 <div class="welcome-card" id="welcome-card">
@@ -525,6 +538,7 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
     </button>
 
     <div style="height:22px;"></div>
+    <div style="font-family:'Baloo 2',sans-serif; font-weight:600; font-size:14px; color:var(--blue-dark); margin-bottom:6px;">🔒 PIN Menu Pengaturan</div>
     <div class="settings-note" id="pin-status-note">Amankan menu Pengaturan ini pakai PIN 4-6 digit, biar gak sembarang orang bisa ubah link Sheets atau hapus data.</div>
     <div class="field-row">
       <div class="field settings-field">
@@ -538,6 +552,22 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
     </div>
     <button class="btn-primary" id="btn-save-pin" style="background:linear-gradient(135deg,var(--teal),#0B7A76); box-shadow:0 8px 16px -8px rgba(14,165,160,.5);">Simpan PIN</button>
     <button class="btn-primary" id="btn-remove-pin" style="background:#fff; color:var(--muted); border:1.5px solid var(--line); box-shadow:none; margin-top:8px;">Nonaktifkan PIN</button>
+
+    <div style="height:26px;"></div>
+    <div style="font-family:'Baloo 2',sans-serif; font-weight:600; font-size:14px; color:var(--blue-dark); margin-bottom:6px;">🔐 PIN Buka Aplikasi</div>
+    <div class="settings-note" id="applock-status-note">Lapisan ekstra: kunci SELURUH app dari awal (bukan cuma menu Pengaturan). Berguna biar customer yang iseng scan QR kwitansi gak bisa buka app kasir.</div>
+    <div class="field-row">
+      <div class="field settings-field">
+        <label>PIN Baru</label>
+        <input type="password" id="f-applock-new" inputmode="numeric" maxlength="6" placeholder="4-6 digit">
+      </div>
+      <div class="field settings-field">
+        <label>Konfirmasi PIN</label>
+        <input type="password" id="f-applock-confirm" inputmode="numeric" maxlength="6" placeholder="ulangi PIN">
+      </div>
+    </div>
+    <button class="btn-primary" id="btn-save-applock-pin" style="background:linear-gradient(135deg,var(--purple),#5A3FD6); box-shadow:0 8px 16px -8px rgba(124,92,252,.5);">Simpan PIN Aplikasi</button>
+    <button class="btn-primary" id="btn-remove-applock-pin" style="background:#fff; color:var(--muted); border:1.5px solid var(--line); box-shadow:none; margin-top:8px;">Nonaktifkan PIN Aplikasi</button>
   </div>
 </div>
 
@@ -1835,6 +1865,8 @@ QRCode.createBytes = function(buffer, rsBlocks) {
   const LS_SHOP_INFO = "py_laundry_shop_info";
   const LS_KASIR_NAME = "py_laundry_kasir_name";
   const LS_SETTINGS_PIN = "py_laundry_settings_pin";
+  const LS_APP_PIN = "py_laundry_app_pin";
+  const SS_APP_UNLOCKED = "py_laundry_app_unlocked";
 
   function loadOrders(){ try{ return JSON.parse(localStorage.getItem(LS_ORDERS)) || []; }catch(e){ return []; } }
   function saveOrders(list){ localStorage.setItem(LS_ORDERS, JSON.stringify(list)); }
@@ -2164,6 +2196,11 @@ QRCode.createBytes = function(buffer, rsBlocks) {
     document.getElementById("pin-status-note").textContent = localStorage.getItem(LS_SETTINGS_PIN)
       ? "PIN aktif — menu ini terkunci sebelum PIN dimasukkan. Isi field di bawah buat ganti PIN."
       : "Amankan menu Pengaturan ini pakai PIN 4-6 digit, biar gak sembarang orang bisa ubah link Sheets atau hapus data.";
+    document.getElementById("f-applock-new").value = "";
+    document.getElementById("f-applock-confirm").value = "";
+    document.getElementById("applock-status-note").textContent = localStorage.getItem(LS_APP_PIN)
+      ? "PIN Aplikasi aktif — seluruh app terkunci sampai PIN dimasukkan (berlaku sekali per sesi browser)."
+      : "Lapisan ekstra: kunci SELURUH app dari awal (bukan cuma menu Pengaturan). Berguna biar customer yang iseng scan QR kwitansi gak bisa buka app kasir.";
     overlayS.classList.add("show"); sheetS.classList.add("show");
   }
   function closeSettings(){ overlayS.classList.remove("show"); sheetS.classList.remove("show"); }
@@ -2235,6 +2272,29 @@ QRCode.createBytes = function(buffer, rsBlocks) {
     toast("PIN dinonaktifkan");
   });
 
+  document.getElementById("btn-save-applock-pin").addEventListener("click", ()=>{
+    const p1 = document.getElementById("f-applock-new").value.trim();
+    const p2 = document.getElementById("f-applock-confirm").value.trim();
+    if(!p1){ toast("Isi PIN dulu ya", true); return; }
+    if(!/^\d{4,6}$/.test(p1)){ toast("PIN harus 4-6 digit angka", true); return; }
+    if(p1 !== p2){ toast("Konfirmasi PIN gak cocok", true); return; }
+    localStorage.setItem(LS_APP_PIN, simpleHash_(p1));
+    document.getElementById("f-applock-new").value = "";
+    document.getElementById("f-applock-confirm").value = "";
+    document.getElementById("applock-status-note").textContent = "PIN Aplikasi aktif — seluruh app terkunci sampai PIN dimasukkan (berlaku sekali per sesi browser).";
+    toast("PIN Aplikasi diaktifkan");
+  });
+
+  document.getElementById("btn-remove-applock-pin").addEventListener("click", ()=>{
+    if(!localStorage.getItem(LS_APP_PIN)){ toast("PIN Aplikasi belum diaktifkan"); return; }
+    const ok = confirm("Nonaktifkan PIN Aplikasi? Siapa pun yang punya link app ini nanti bisa langsung buka tanpa PIN.");
+    if(!ok) return;
+    localStorage.removeItem(LS_APP_PIN);
+    sessionStorage.removeItem(SS_APP_UNLOCKED);
+    document.getElementById("applock-status-note").textContent = "Lapisan ekstra: kunci SELURUH app dari awal (bukan cuma menu Pengaturan). Berguna biar customer yang iseng scan QR kwitansi gak bisa buka app kasir.";
+    toast("PIN Aplikasi dinonaktifkan");
+  });
+
   document.getElementById("btn-clear-data").addEventListener("click", ()=>{
     if(orders.length === 0){ toast("Tidak ada data untuk dihapus"); return; }
     const ok = confirm("Yakin mau hapus SEMUA data order di HP ini? Tindakan ini tidak bisa dibatalkan.");
@@ -2289,11 +2349,11 @@ QRCode.createBytes = function(buffer, rsBlocks) {
   }
 
   function qrPayloadFor_(id){
-    // Kalau app sudah di-hosting (http/https), QR berisi link yang otomatis
-    // nyari order ini pas di-scan. Kalau masih dibuka sebagai file lokal,
-    // QR cuma berisi ID order-nya saja (staff tinggal ketik manual di search).
-    if(location.protocol === "file:") return id;
-    return location.origin + location.pathname + "?order=" + encodeURIComponent(id);
+    // Selalu berisi ID polos aja (bukan link ke app). App ini internal buat staf,
+    // jadi kalau customer iseng scan QR di kwitansi pakai HP sendiri, mereka cuma
+    // lihat teks kode doang — gak kebuka ke app kasir. Staf tetap bisa scan & auto-filter
+    // lewat tombol kamera DI DALAM app (yang mereka buka sendiri, bukan dari QR ini).
+    return id;
   }
 
   function openReceipt(o){
@@ -2511,47 +2571,76 @@ QRCode.createBytes = function(buffer, rsBlocks) {
   }
 
   /* ---------------- Init ---------------- */
-  document.getElementById("brand-logo").src = LOGO_URI;
-  document.getElementById("welcome-logo").src = LOGO_URI;
+  function startApp(){
+    document.getElementById("brand-logo").src = LOGO_URI;
+    document.getElementById("welcome-logo").src = LOGO_URI;
 
-  const overlayWelcome = document.getElementById("overlay-welcome");
-  const welcomeCard = document.getElementById("welcome-card");
-  function hideWelcome(){ overlayWelcome.classList.remove("show"); welcomeCard.classList.add("hide"); }
-  const savedKasir = localStorage.getItem(LS_KASIR_NAME);
-  if(savedKasir){ hideWelcome(); }
-  else { document.getElementById("f-welcome-name").focus(); }
+    const overlayWelcome = document.getElementById("overlay-welcome");
+    const welcomeCard = document.getElementById("welcome-card");
+    function hideWelcome(){ overlayWelcome.classList.remove("show"); welcomeCard.classList.add("hide"); }
+    const savedKasir = localStorage.getItem(LS_KASIR_NAME);
+    if(savedKasir){ hideWelcome(); }
+    else { document.getElementById("f-welcome-name").focus(); }
 
-  document.getElementById("btn-welcome-start").addEventListener("click", ()=>{
-    const name = document.getElementById("f-welcome-name").value.trim();
-    if(!name){ toast("Isi nama kamu dulu ya", true); return; }
-    localStorage.setItem(LS_KASIR_NAME, name);
-    hideWelcome();
-    toast("Selamat bekerja, " + name + "!");
-  });
-  document.getElementById("f-welcome-name").addEventListener("keydown", (e)=>{
-    if(e.key === "Enter") document.getElementById("btn-welcome-start").click();
-  });
+    document.getElementById("btn-welcome-start").addEventListener("click", ()=>{
+      const name = document.getElementById("f-welcome-name").value.trim();
+      if(!name){ toast("Isi nama kamu dulu ya", true); return; }
+      localStorage.setItem(LS_KASIR_NAME, name);
+      hideWelcome();
+      toast("Selamat bekerja, " + name + "!");
+    });
+    document.getElementById("f-welcome-name").addEventListener("keydown", (e)=>{
+      if(e.key === "Enter") document.getElementById("btn-welcome-start").click();
+    });
 
-  refresh();
+    refresh();
 
-  // Kalau app dibuka lewat link hasil scan QR kwitansi (?order=PY...),
-  // otomatis isi kotak pencarian & sorot kartu order-nya.
-  (function handleScanLink(){
-    const params = new URLSearchParams(location.search);
-    const scannedId = params.get("order");
-    if(!scannedId) return;
-    document.getElementById("search-input").value = scannedId;
-    renderList();
-    history.replaceState(null, "", location.pathname); // biar URL bersih lagi
-    setTimeout(()=>{
-      const card = document.querySelector('.ticket[data-id="'+CSS.escape(scannedId)+'"]');
-      if(card){
-        card.scrollIntoView({behavior:"smooth", block:"center"});
-        card.classList.add("ticket-flash");
-        setTimeout(()=> card.classList.remove("ticket-flash"), 2200);
+    // Kalau app dibuka lewat link hasil scan QR kwitansi (?order=PY...),
+    // otomatis isi kotak pencarian & sorot kartu order-nya.
+    (function handleScanLink(){
+      const params = new URLSearchParams(location.search);
+      const scannedId = params.get("order");
+      if(!scannedId) return;
+      document.getElementById("search-input").value = scannedId;
+      renderList();
+      history.replaceState(null, "", location.pathname); // biar URL bersih lagi
+      setTimeout(()=>{
+        const card = document.querySelector('.ticket[data-id="'+CSS.escape(scannedId)+'"]');
+        if(card){
+          card.scrollIntoView({behavior:"smooth", block:"center"});
+          card.classList.add("ticket-flash");
+          setTimeout(()=> card.classList.remove("ticket-flash"), 2200);
+        }
+      }, 150);
+    })();
+  }
+
+  // App Lock — kalau PIN Aplikasi aktif & belum di-unlock di sesi browser ini,
+  // tahan SEMUA isi app (dashboard, order, dsb) sampai PIN benar dimasukkan.
+  const appPinHash = localStorage.getItem(LS_APP_PIN);
+  const alreadyUnlocked = sessionStorage.getItem(SS_APP_UNLOCKED) === "1";
+  if(appPinHash && !alreadyUnlocked){
+    document.getElementById("overlay-applock").classList.add("show");
+    document.getElementById("applock-card").classList.remove("hide");
+    setTimeout(()=> document.getElementById("f-applock-pin").focus(), 100);
+    function tryAppUnlock(){
+      const entered = document.getElementById("f-applock-pin").value.trim();
+      if(simpleHash_(entered) === appPinHash){
+        sessionStorage.setItem(SS_APP_UNLOCKED, "1");
+        document.getElementById("overlay-applock").classList.remove("show");
+        document.getElementById("applock-card").classList.add("hide");
+        startApp();
+      } else {
+        toast("PIN salah", true);
+        document.getElementById("f-applock-pin").value = "";
+        document.getElementById("f-applock-pin").focus();
       }
-    }, 150);
-  })();
+    }
+    document.getElementById("btn-applock-unlock").addEventListener("click", tryAppUnlock);
+    document.getElementById("f-applock-pin").addEventListener("keydown", (e)=>{ if(e.key==="Enter") tryAppUnlock(); });
+  } else {
+    startApp();
+  }
 })();
 </script>
 </body>
