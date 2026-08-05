@@ -2193,24 +2193,48 @@ QRCode.createBytes = function(buffer, rsBlocks) {
   }
 
   function openSettingsSheet(){
-    document.getElementById("f-script-url").value = localStorage.getItem(LS_SCRIPT_URL) || "";
+    // 1. Ambil URL asli dari localStorage
+    const savedUrl = localStorage.getItem(LS_SCRIPT_URL) || "";
+    const scriptUrlInput = document.getElementById("f-script-url");
+    
+    // 2. Masking URL agar tidak terlihat secara terang-terangan di layar
+    if (scriptUrlInput) {
+      if (savedUrl) {
+        scriptUrlInput.value = "";
+        scriptUrlInput.placeholder = "•••••••••••••••• (Tersimpan aman, biarkan kosong jika tidak diubah)";
+      } else {
+        scriptUrlInput.placeholder = "https://script.google.com/macros/s/.../exec";
+        scriptUrlInput.value = "";
+      }
+    }
+
+    // 3. Muat data pengaturan lainnya
     document.getElementById("f-kasir-name").value = localStorage.getItem(LS_KASIR_NAME) || "";
     const shop = JSON.parse(localStorage.getItem(LS_SHOP_INFO) || "{}");
     document.getElementById("f-shop-alamat").value = shop.alamat || "";
     document.getElementById("f-shop-telp").value = shop.telp || "";
+    
     document.getElementById("f-pin-new").value = "";
     document.getElementById("f-pin-confirm").value = "";
     document.getElementById("pin-status-note").textContent = localStorage.getItem(LS_SETTINGS_PIN)
       ? "PIN aktif — menu ini terkunci sebelum PIN dimasukkan. Isi field di bawah buat ganti PIN."
       : "Amankan menu Pengaturan ini pakai PIN 4-6 digit, biar gak sembarang orang bisa ubah link Sheets atau hapus data.";
+      
     document.getElementById("f-applock-new").value = "";
     document.getElementById("f-applock-confirm").value = "";
     document.getElementById("applock-status-note").textContent = localStorage.getItem(LS_APP_PIN)
       ? "PIN Aplikasi aktif — seluruh app terkunci sampai PIN dimasukkan (berlaku sekali per sesi browser)."
       : "Lapisan ekstra: kunci SELURUH app dari awal (bukan cuma menu Pengaturan). Berguna biar customer yang iseng scan QR kwitansi gak bisa buka app kasir.";
-    overlayS.classList.add("show"); sheetS.classList.add("show");
+      
+    overlayS.classList.add("show"); 
+    sheetS.classList.add("show");
   }
-  function closeSettings(){ overlayS.classList.remove("show"); sheetS.classList.remove("show"); }
+
+  function closeSettings(){ 
+    overlayS.classList.remove("show"); 
+    sheetS.classList.remove("show"); 
+  }
+
   document.getElementById("close-settings-sheet").addEventListener("click", closeSettings);
   overlayS.addEventListener("click", closeSettings);
 
