@@ -91,9 +91,9 @@ main{max-width:720px; margin:0 auto; padding:0 16px;}
 .status-chip .num{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:17px;}
 .status-chip .lbl{font-size:10px; font-weight:600; margin-top:2px;}
 .status-chip.terima{background:var(--blue-soft); color:var(--blue);}
-.status-chip.selesai{background:var(--teal-soft); color:var(--teal);}
-.status-chip.bayar{background:var(--purple-soft); color:var(--purple);}
-.status-chip.ambil{background:var(--green-soft); color:var(--green);}
+.status-chip.terima-lunas{background:var(--purple-soft); color:var(--purple);}
+.status-chip.selesai-lunas{background:var(--teal-soft); color:var(--teal);}
+.status-chip.diambil{background:var(--green-soft); color:var(--green);}
 
 /* ---------- Chart ---------- */
 .chart-wrap{overflow-x:auto; padding-bottom:4px;}
@@ -360,94 +360,6 @@ main{max-width:720px; margin:0 auto; padding:0 16px;}
     document.getElementById("btn-retry").addEventListener("click", loadSummary);
   }
 
-  /* ---------------- Chart (SVG murni, tanpa library) ---------------- */
-  function buildDailyChart(dailyRevenue){
-    const w = Math.max(600, dailyRevenue.length * 20);
-    const h = 140;
-    const padBottom = 20;
-    const max = Math.max(1, ...dailyRevenue.map(d=>d.total));
-    const barW = (w / dailyRevenue.length) * 0.62;
-    const gap = (w / dailyRevenue.length);
-
-    let bars = "";
-    dailyRevenue.forEach((d, i) => {
-      const barH = Math.max(2, (d.total / max) * (h - padBottom - 14));
-      const x = i * gap + (gap - barW)/2;
-      const y = h - padBottom - barH;
-      const showLabel = (i % Math.ceil(dailyRevenue.length/8) === 0) || i === dailyRevenue.length-1;
-      const dateShort = d.date.slice(8,10) + "/" + d.date.slice(5,7);
-      bars += `<rect class="chart-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="3"><title>${d.date}: ${rupiah(d.total)}</title></rect>`;
-      if(showLabel){
-        bars += `<text class="chart-axis-label" x="${(x+barW/2).toFixed(1)}" y="${h-4}" text-anchor="middle">${dateShort}</text>`;
-      }
-    });
-
-    return `<div class="chart-wrap"><svg class="chart-svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">${bars}</svg></div>`;
-  }
-
-  /* ---------------- Render utama ---------------- */
-  function renderDashboard(data){
-    const sc = data.statusCounts || {};
-    const topCustomers = data.topCustomers || [];
-    const rankClass = (i)=> i===0 ? "top1" : i===1 ? "top2" : i===2 ? "top3" : "";
-
-    content.innerHTML = `
-      <div class="stat-grid">
-        <div class="stat-card"><div class="lbl">Omzet Hari Ini</div><div class="val">${rupiah(data.todayRevenue)}</div></div>
-        <div class="stat-card accent-teal"><div class="lbl">Omzet Minggu Ini</div><div class="val">${rupiah(data.weekRevenue)}</div></div>
-        <div class="stat-card accent-purple"><div class="lbl">Omzet Bulan Ini</div><div class="val">${rupiah(data.monthRevenue)}</div></div>
-        <div class="stat-card accent-green"><div class="lbl">Total Order (semua)</div><div class="val">${(data.totalOrders||0).toLocaleString("id-ID")}</div></div>
-      </div>
-      <div class="updated-note">Total omzet sepanjang waktu: <b>${rupiah(data.allTimeRevenue)}</b> &middot; Order hari ini: <b>${data.todayCount||0}</b></div>
-
-      <div class="card">
-        <h2>Status Order Hari Ini</h2>
-        <div class="status-grid">
-          <div class="status-chip terima"><div class="num">${sc["Terima Order"]||0}</div><div class="lbl">Terima</div></div>
-          <div class="status-chip selesai"><div class="num">${sc["Selesai"]||0}</div><div class="lbl">Selesai</div></div>
-          <div class="status-chip bayar"><div class="num">${sc["Bayar"]||0}</div><div class="lbl">Bayar</div></div>
-          <div class="status-chip ambil"><div class="num">${sc["Ambil"]||0}</div><div class="lbl">Ambil</div></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>Tren Omzet 30 Hari Terakhir</h2>
-        ${buildDailyChart(data.dailyRevenue || [])}
-      </div>
-
-      <div class="card">
-        <h2>Top 10 Pelanggan</h2>
-        ${topCustomers.length === 0 ? '<p style="color:var(--muted); font-size:13px; margin:0;">Belum ada data pelanggan.</p>' :
-          topCustomers.map((c,i)=>`
-            <div class="cust-row">
-              <div class="cust-rank ${rankClass(i)}">${i+1}</div>
-              <div class="cust-info">
-                <div class="cust-name">${escapeHtml(c.nama||"-")}</div>
-                <div class="cust-meta">${escapeHtml(c.hp||"-")} &middot; ${c.orderCount} order</div>
-              </div>
-              <div class="cust-spend">${rupiahShort(c.totalSpend)}</div>
-            </div>
-          `).join("")
-        }
-      </div>
-    `;
-  }
-
-  /* ---------------- Load data ---------------- */
-  async function loadSummary(){
-    const url = localStorage.getItem(LS_SCRIPT_URL);
-    if(!url){ renderSetupPrompt(); return; }
-    renderLoading();
-    try{
-      const res = await fetch(url + (url.includes("?")?"&":"?") + "action=summary");
-      if(!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json();
-      renderDashboard(data);
-    }catch(err){
-      renderError("Cek koneksi internet atau URL Apps Script di Pengaturan.");
-    }
-  }
-
   /* ---------------- Period picker ---------------- */
   function todayLocal(){
     const d = new Date();
@@ -583,10 +495,10 @@ main{max-width:720px; margin:0 auto; padding:0 16px;}
       <div class="card">
         <h2>Status Order</h2>
         <div class="status-grid">
-          <div class="status-chip terima"><div class="num">${sc["Terima Order"]||0}</div><div class="lbl">Terima</div></div>
-          <div class="status-chip selesai"><div class="num">${sc["Selesai"]||0}</div><div class="lbl">Selesai</div></div>
-          <div class="status-chip bayar"><div class="num">${sc["Bayar"]||0}</div><div class="lbl">Bayar</div></div>
-          <div class="status-chip ambil"><div class="num">${sc["Ambil"]||0}</div><div class="lbl">Ambil</div></div>
+          <div class="status-chip terima"><div class="num">${sc["Terima Order"]||0}</div><div class="lbl">Terima Order</div></div>
+          <div class="status-chip terima-lunas"><div class="num">${sc["Terima Order & Lunas"]||0}</div><div class="lbl">Terima &amp; Lunas</div></div>
+          <div class="status-chip selesai-lunas"><div class="num">${sc["Selesai & Lunas"]||0}</div><div class="lbl">Selesai &amp; Lunas</div></div>
+          <div class="status-chip diambil"><div class="num">${sc["Diambil"]||0}</div><div class="lbl">Diambil</div></div>
         </div>
       </div>
 
