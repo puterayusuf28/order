@@ -518,6 +518,13 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
     <button class="btn-primary" id="btn-save-settings">Simpan Pengaturan</button>
 
     <div style="height:22px;"></div>
+    <div class="settings-note">Biar tetap ringan, Pull biasa cuma narik 100 order terbaru. Order lebih lama tetap aman selamanya di Google Sheets. Kalau perlu cari order lama, pakai tombol ini sesekali.</div>
+    <button class="btn-primary" id="btn-pull-full" style="background:linear-gradient(135deg,var(--blue),var(--blue-dark)); box-shadow:0 8px 16px -8px rgba(23,60,151,.5);">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 12l6 6 6-6"/><path d="M4 20h16"/></svg>
+      Pull Riwayat Lengkap
+    </button>
+
+    <div style="height:22px;"></div>
     <div class="settings-note" style="background:var(--red-soft); color:#7A1E19;">Aksi di bawah ini menghapus seluruh data order yang tersimpan di HP ini. Tidak bisa dibatalkan — pastikan data sudah di-Push ke Google Sheets dulu kalau masih perlu.</div>
     <button class="btn-primary" id="btn-clear-data" style="background:linear-gradient(135deg,var(--red),#A6302B); box-shadow:0 8px 16px -8px rgba(214,69,61,.5);">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
@@ -2143,6 +2150,7 @@ QRCode.createBytes = function(buffer, rsBlocks) {
     };
     orders.push(order);
     saveOrders(orders);
+    pruneOldOrders_();
     refresh();
     closeSheet();
     toast("Order " + id + " tersimpan");
@@ -2532,6 +2540,22 @@ QRCode.createBytes = function(buffer, rsBlocks) {
   document.getElementById("btn-close-scanner").addEventListener("click", closeScanner);
 
   /* ---------------- Push / Pull ---------------- */
+  const MAX_ACTIVE_ORDERS = 100; // batas order aktif yang disimpan di HP, biar tetap ringan
+
+  // Buang order lama (yang udah ke-Push / aman di Sheets) kalau jumlah order aktif
+  // melebihi batas. Order yang BELUM ke-Push gak pernah dibuang, apapun jumlahnya —
+  // biar gak ada data yang hilang sebelum sempat disinkronkan.
+  function pruneOldOrders_(){
+    if(orders.length <= MAX_ACTIVE_ORDERS) return;
+    const sorted = orders.slice().sort((a,b)=> b.createdAt - a.createdAt);
+    const keepIds = new Set(sorted.slice(0, MAX_ACTIVE_ORDERS).map(o=>o.id));
+    const before = orders.length;
+    orders = orders.filter(o => keepIds.has(o.id) || !o.synced);
+    if(orders.length < before){
+      saveOrders(orders);
+    }
+  }
+
   async function doPush(){
     const url = localStorage.getItem(LS_SCRIPT_URL);
     if(!url){ toast("Isi dulu URL Apps Script di Pengaturan", true); return; }
@@ -2547,6 +2571,8 @@ QRCode.createBytes = function(buffer, rsBlocks) {
       if(!res.ok) throw new Error("HTTP " + res.status);
       unsynced.forEach(o=> o.synced = true);
       saveOrders(orders);
+      pruneOldOrders_();
+      refresh();
       toast("Push berhasil: " + unsynced.length + " order tersinkron");
     }catch(err){
       toast("Push gagal — cek koneksi / URL Apps Script", true);
@@ -2557,7 +2583,36 @@ QRCode.createBytes = function(buffer, rsBlocks) {
     const url = localStorage.getItem(LS_SCRIPT_URL);
     if(!url){ toast("Isi dulu URL Apps Script di Pengaturan", true); return; }
     try{
-      toast("Mengambil data terbaru...");
+      toast("Mengambil " + MAX_ACTIVE_ORDERS + " order terbaru...");
+      const res = await fetch(url + (url.includes("?")?"&":"?") + "action=pull&limit=" + MAX_ACTIVE_ORDERS);
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      const remote = Array.isArray(data) ? data : (data.orders || []);
+      let added = 0, updated = 0;
+      remote.forEach(r=>{
+        const existing = orders.find(o=>o.id === r.id);
+        if(existing){ Object.assign(existing, r, {synced:true}); updated++; }
+        else { orders.push(Object.assign({}, r, {synced:true})); added++; }
+      });
+      saveOrders(orders);
+      pruneOldOrders_();
+      refresh();
+      toast("Pull selesai: " + added + " baru, " + updated + " diperbarui");
+    }catch(err){
+      toast("Pull gagal — cek koneksi / URL Apps Script", true);
+    }
+  }
+
+  // Pull semua riwayat dari awal — dipakai sesekali aja kalau perlu cari order lama
+  // yang udah gak ada di 100 order aktif. Hasilnya gak langsung diarsipkan lagi,
+  // biar sempat dicari/dilihat dulu; nanti otomatis ke-rapihin lagi di Pull/order berikutnya.
+  async function doPullFull(){
+    const url = localStorage.getItem(LS_SCRIPT_URL);
+    if(!url){ toast("Isi dulu URL Apps Script di Pengaturan", true); return; }
+    const ok = confirm("Tarik SEMUA riwayat order dari awal? Ini bisa lebih lambat & lebih banyak data kalau riwayatnya udah panjang.");
+    if(!ok) return;
+    try{
+      toast("Mengambil semua riwayat...");
       const res = await fetch(url + (url.includes("?")?"&":"?") + "action=pull");
       if(!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
@@ -2570,14 +2625,16 @@ QRCode.createBytes = function(buffer, rsBlocks) {
       });
       saveOrders(orders);
       refresh();
-      toast("Pull selesai: " + added + " baru, " + updated + " diperbarui");
+      closeSettings();
+      toast("Riwayat lengkap ditarik: " + added + " baru, " + updated + " diperbarui");
     }catch(err){
-      toast("Pull gagal — cek koneksi / URL Apps Script", true);
+      toast("Pull riwayat gagal — cek koneksi / URL Apps Script", true);
     }
   }
 
   document.getElementById("btn-push").addEventListener("click", doPush);
   document.getElementById("btn-pull").addEventListener("click", doPull);
+  document.getElementById("btn-pull-full").addEventListener("click", doPullFull);
 
   // Best-effort: hapus baris di Google Sheets juga kalau order ini sebelumnya sudah pernah di-Push.
   // Dijalankan diam-diam di background — kalau gagal (offline/URL belum diisi), data lokal tetap terhapus.
