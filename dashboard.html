@@ -182,6 +182,37 @@ main{max-width:720px; margin:0 auto; padding:0 16px;}
 }
 #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 #toast.err{background:#B4231F;}
+
+/* ---------- Period picker ---------- */
+.period-bar{
+  background:var(--surface); border-radius:16px; padding:12px 14px;
+  margin:-22px 0 16px; box-shadow:var(--shadow); border:1px solid var(--line);
+  display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+}
+.preset-group{display:flex; gap:6px; flex-wrap:wrap; flex:1;}
+.preset-btn{
+  padding:7px 14px; border-radius:10px; border:1.5px solid var(--line); background:#FAFCFF;
+  color:var(--muted); font-family:'Plus Jakarta Sans',sans-serif; font-weight:600; font-size:12px;
+  cursor:pointer; transition:.15s ease; white-space:nowrap;
+}
+.preset-btn.active{ background:var(--blue); color:#fff; border-color:var(--blue); }
+.preset-btn:active{ transform:scale(.95); }
+.custom-wrap{display:flex; gap:6px; align-items:center; flex-wrap:wrap;}
+.custom-wrap input[type=date]{
+  border:1.5px solid var(--line); border-radius:10px; padding:7px 10px;
+  font-family:'Plus Jakarta Sans',sans-serif; font-size:12px; font-weight:500; color:var(--ink);
+  background:#FAFCFF; outline:none; max-width:130px;
+}
+.custom-wrap input[type=date]:focus{ border-color:var(--blue); background:#fff; }
+.custom-apply{
+  padding:7px 14px; border-radius:10px; background:var(--blue-soft); color:var(--blue);
+  border:none; font-family:'Plus Jakarta Sans',sans-serif; font-weight:700; font-size:12px; cursor:pointer;
+}
+.custom-apply:active{ background:var(--blue); color:#fff; }
+.period-label{
+  font-size:12px; color:var(--muted); font-weight:600; text-align:right; padding-top:2px; white-space:nowrap;
+}
+
 </style>
 </head>
 <body>
@@ -196,6 +227,9 @@ main{max-width:720px; margin:0 auto; padding:0 16px;}
       </div>
     </div>
     <div class="header-actions">
+      <button class="icon-btn" id="btn-back" title="Kembali ke App Kasir">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      </button>
       <button class="icon-btn" id="btn-refresh" title="Refresh">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg>
       </button>
@@ -207,6 +241,23 @@ main{max-width:720px; margin:0 auto; padding:0 16px;}
 </header>
 
 <main>
+  <div class="period-bar" id="period-bar">
+    <div class="preset-group">
+      <button class="preset-btn active" data-preset="today">Hari Ini</button>
+      <button class="preset-btn" data-preset="week">7 Hari</button>
+      <button class="preset-btn" data-preset="month">30 Hari</button>
+      <button class="preset-btn" data-preset="thismonth">Bulan Ini</button>
+      <button class="preset-btn" data-preset="custom">Custom</button>
+    </div>
+    <div class="custom-wrap" id="custom-wrap" style="display:none;">
+      <input type="date" id="f-from" title="Dari tanggal">
+      <span style="color:var(--muted); font-size:12px;">–</span>
+      <input type="date" id="f-to" title="Sampai tanggal">
+      <button class="custom-apply" id="btn-apply-custom">Tampilkan</button>
+    </div>
+  </div>
+  <div class="period-label" id="period-label"></div>
+
   <div id="content"></div>
 </main>
 
@@ -397,8 +448,195 @@ main{max-width:720px; margin:0 auto; padding:0 16px;}
     }
   }
 
+  /* ---------------- Period picker ---------------- */
+  function todayLocal(){
+    const d = new Date();
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  }
+  function addDays(dateStr, n){
+    const d = new Date(dateStr+"T12:00:00");
+    d.setDate(d.getDate()+n);
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  }
+  function fmtDateID(iso){
+    const [y,m,day] = iso.split("-");
+    const months=["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agt","Sep","Okt","Nov","Des"];
+    return parseInt(day)+" "+months[parseInt(m)-1]+" "+y;
+  }
+
+  let currentFrom = todayLocal();
+  let currentTo   = todayLocal();
+
+  function getPresetRange(preset){
+    const today = todayLocal();
+    if(preset==="today")     return {from:today, to:today};
+    if(preset==="week")      return {from:addDays(today,-6), to:today};
+    if(preset==="month")     return {from:addDays(today,-29), to:today};
+    if(preset==="thismonth"){
+      const d=new Date(); const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0");
+      return {from:y+"-"+m+"-01", to:today};
+    }
+    return null; // custom
+  }
+
+  function updatePeriodLabel(from, to){
+    const el = document.getElementById("period-label");
+    if(!el) return;
+    el.textContent = from===to ? fmtDateID(from) : fmtDateID(from)+" — "+fmtDateID(to);
+  }
+
+  document.querySelectorAll(".preset-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll(".preset-btn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      const preset = btn.dataset.preset;
+      const cw = document.getElementById("custom-wrap");
+      if(preset==="custom"){
+        cw.style.display="flex";
+        const today=todayLocal();
+        document.getElementById("f-from").value = currentFrom;
+        document.getElementById("f-to").value   = currentTo;
+      } else {
+        cw.style.display="none";
+        const r=getPresetRange(preset);
+        currentFrom=r.from; currentTo=r.to;
+        updatePeriodLabel(currentFrom,currentTo);
+        loadSummary();
+      }
+    });
+  });
+
+  document.getElementById("btn-apply-custom").addEventListener("click", ()=>{
+    const from = document.getElementById("f-from").value;
+    const to   = document.getElementById("f-to").value;
+    if(!from || !to){ toast("Isi dulu tanggal dari dan sampai ya", true); return; }
+    if(from>to){ toast("Tanggal 'dari' harus sebelum 'sampai'", true); return; }
+    currentFrom=from; currentTo=to;
+    updatePeriodLabel(currentFrom,currentTo);
+    loadSummary();
+  });
+
+  /* ---------------- Chart (grouping otomatis kalau range panjang) ---------------- */
+  function buildChart(dailyRevenue){
+    // Kalau data >60 hari, grup per minggu supaya bar gak terlalu banyak & tetap kebaca
+    let data = dailyRevenue;
+    if(dailyRevenue.length > 60){
+      const weekMap = {};
+      dailyRevenue.forEach(d=>{
+        const dt=new Date(d.date+"T12:00:00"), day=dt.getDay();
+        const monday=new Date(dt); monday.setDate(dt.getDate()-(day===0?6:day-1));
+        const wk=monday.toISOString().slice(0,10);
+        weekMap[wk]=(weekMap[wk]||0)+d.total;
+      });
+      data=Object.keys(weekMap).sort().map(k=>({date:k,total:weekMap[k]}));
+    }
+
+    const MIN_W = 320;
+    const barCount = data.length;
+    const w = Math.max(MIN_W, barCount * (barCount > 30 ? 16 : 22));
+    const h = 140;
+    const padBottom = 20;
+    const maxVal = Math.max(1, ...data.map(d=>d.total));
+    const barW = (w/barCount)*0.62;
+    const gap  = (w/barCount);
+    const labelEvery = Math.ceil(barCount/8);
+
+    let bars="";
+    data.forEach((d,i)=>{
+      const barH = Math.max(2,(d.total/maxVal)*(h-padBottom-14));
+      const x=(i*gap+(gap-barW)/2).toFixed(1);
+      const y=(h-padBottom-barH).toFixed(1);
+      const showLbl = (i%labelEvery===0)||(i===barCount-1);
+      const lbl = data.length>60 ? d.date.slice(5,10) : d.date.slice(8,10)+"/"+d.date.slice(5,7);
+      bars+=`<rect class="chart-bar" x="${x}" y="${y}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="3"><title>${d.date}: ${rupiah(d.total)}</title></rect>`;
+      if(showLbl) bars+=`<text class="chart-axis-label" x="${(parseFloat(x)+barW/2).toFixed(1)}" y="${h-4}" text-anchor="middle">${lbl}</text>`;
+    });
+    return `<div class="chart-wrap"><svg class="chart-svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">${bars}</svg></div>`;
+  }
+
+  /* ---------------- Render dashboard (period-aware) ---------------- */
+  function renderDashboard(data){
+    const sc = data.statusCounts || {};
+    const topCustomers = data.topCustomers || [];
+    const rankClass = i=> i===0?"top1":i===1?"top2":i===2?"top3":"";
+    const periodTxt = data.dateFrom===data.dateTo
+      ? fmtDateID(data.dateFrom)
+      : fmtDateID(data.dateFrom)+" — "+fmtDateID(data.dateTo);
+
+    content.innerHTML = `
+      <div class="stat-grid">
+        <div class="stat-card" style="grid-column:span 2">
+          <div class="lbl">Total Omzet Periode Ini</div>
+          <div class="val" style="font-size:22px;">${rupiah(data.totalRevenue)}</div>
+        </div>
+        <div class="stat-card accent-teal">
+          <div class="lbl">Total Order</div>
+          <div class="val">${(data.totalOrders||0).toLocaleString("id-ID")}</div>
+        </div>
+        <div class="stat-card accent-purple">
+          <div class="lbl">Rata-rata/Order</div>
+          <div class="val">${rupiah(data.avgOrderValue)}</div>
+        </div>
+      </div>
+      <div class="updated-note">Periode: <b>${periodTxt}</b></div>
+
+      <div class="card">
+        <h2>Status Order</h2>
+        <div class="status-grid">
+          <div class="status-chip terima"><div class="num">${sc["Terima Order"]||0}</div><div class="lbl">Terima</div></div>
+          <div class="status-chip selesai"><div class="num">${sc["Selesai"]||0}</div><div class="lbl">Selesai</div></div>
+          <div class="status-chip bayar"><div class="num">${sc["Bayar"]||0}</div><div class="lbl">Bayar</div></div>
+          <div class="status-chip ambil"><div class="num">${sc["Ambil"]||0}</div><div class="lbl">Ambil</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Tren Omzet${(data.dailyRevenue||[]).length>60?" (per Minggu)":""}</h2>
+        ${buildChart(data.dailyRevenue||[])}
+      </div>
+
+      <div class="card">
+        <h2>Top 10 Pelanggan</h2>
+        ${topCustomers.length===0 ? '<p style="color:var(--muted); font-size:13px; margin:0;">Belum ada data pelanggan di periode ini.</p>' :
+          topCustomers.map((c,i)=>`
+            <div class="cust-row">
+              <div class="cust-rank ${rankClass(i)}">${i+1}</div>
+              <div class="cust-info">
+                <div class="cust-name">${escapeHtml(c.nama||"-")}</div>
+                <div class="cust-meta">${escapeHtml(c.hp||"-")} &middot; ${c.orderCount} order</div>
+              </div>
+              <div class="cust-spend">${rupiahShort(c.totalSpend)}</div>
+            </div>
+          `).join("")
+        }
+      </div>
+    `;
+  }
+
+  /* ---------------- Load data ---------------- */
+  async function loadSummary(){
+    const url = localStorage.getItem(LS_SCRIPT_URL);
+    if(!url){ renderSetupPrompt(); return; }
+    renderLoading();
+    try{
+      const sep = url.includes("?")?"&":"?";
+      const res = await fetch(url+sep+"action=summary&from="+currentFrom+"&to="+currentTo);
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      const data = await res.json();
+      renderDashboard(data);
+    }catch(err){
+      renderError("Cek koneksi internet atau URL Apps Script di Pengaturan.");
+    }
+  }
+
+  document.getElementById("btn-back").addEventListener("click", ()=>{
+    const base = location.href.replace(/\/[^/]*$/, "/");
+    window.location.href = base + "index.html";
+  });
   document.getElementById("btn-refresh").addEventListener("click", loadSummary);
 
+  // Set default periode ke hari ini
+  updatePeriodLabel(currentFrom, currentTo);
   loadSummary();
 })();
 </script>

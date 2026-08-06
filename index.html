@@ -379,6 +379,9 @@ main{max-width:560px; margin:0 auto; padding:0 16px;}
       <button class="icon-btn" id="btn-push" title="Push data">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V8M6 12l6-6 6 6"/><path d="M4 4h16"/></svg>
       </button>
+      <button class="icon-btn" id="btn-dashboard" title="Dashboard Owner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17h7M17 14v7"/></svg>
+      </button>
       <button class="icon-btn" id="btn-settings" title="Pengaturan">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1.04 1.56V21a2 2 0 01-4 0v-.09A1.7 1.7 0 008.5 19.36a1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.87 1.7 1.7 0 00-1.56-1.04H2a2 2 0 010-4h.09A1.7 1.7 0 003.64 8.5a1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.87.34H8a1.7 1.7 0 001.04-1.56V2a2 2 0 014 0v.09a1.7 1.7 0 001.04 1.56 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.87V8a1.7 1.7 0 001.56 1.04H21a2 2 0 010 4h-.09a1.7 1.7 0 00-1.56 1.04z"/></svg>
       </button>
@@ -2635,6 +2638,13 @@ QRCode.createBytes = function(buffer, rsBlocks) {
   document.getElementById("btn-push").addEventListener("click", doPush);
   document.getElementById("btn-pull").addEventListener("click", doPull);
   document.getElementById("btn-pull-full").addEventListener("click", doPullFull);
+  document.getElementById("btn-dashboard").addEventListener("click", ()=>{
+    // Navigasi ke dashboard.html, satu folder sama dengan index.html.
+    // Biar link ini tetap jalan di hosting manapun (Cloudflare Pages, GitHub Pages, file lokal),
+    // kita pakai path relatif dari URL sekarang.
+    const base = location.href.replace(/\/[^/]*$/, "/");
+    window.location.href = base + "dashboard.html";
+  });
 
   // Best-effort: hapus baris di Google Sheets juga kalau order ini sebelumnya sudah pernah di-Push.
   // Dijalankan diam-diam di background — kalau gagal (offline/URL belum diisi), data lokal tetap terhapus.
